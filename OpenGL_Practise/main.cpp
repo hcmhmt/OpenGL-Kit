@@ -1,20 +1,29 @@
 #include<stdio.h>
 #include<string.h>
 #include<cmath>
+#include<iostream>
 
-#include<gl/glew.h>
-#include<GLFW/glfw3.h>
-#include<glm/mat4x4.hpp>
+#include<gl\glew.h>
+#include<GLFW\glfw3.h>
+
+#include<glm\glm.hpp>
+#include<glm\gtc\matrix_transform.hpp>
+#include<glm\gtc\type_ptr.hpp>
+
+using namespace std;
 
 //Window Dimensions
 const GLint WIDTH = 800, HEIGHT = 600;
+const float toRadians = 3.14159265f / 180.0f;
 
-GLuint VAO, VBO, shader, uniformXMove;
+GLuint VAO, VBO, shader, uniformModel;
 
 bool direction = true;
 float triOffset = 0.0f;
 float triMaxoffset = 0.7f;
-float triIncrement= 0.05f;
+float triIncrement= 0.0075f;
+
+float curAngle = 0.0f;
 
 // Vertex Shader
 static const char* vShader = "									 \n\
@@ -22,10 +31,10 @@ static const char* vShader = "									 \n\
 																 \n\
 layout (location = 0) in vec3 pos;								 \n\
 																 \n\
-uniform float xMove; 											 \n\
+uniform mat4 model; 											 \n\
 																 \n\
 void main() {													 \n\
-	gl_Position = vec4(0.4 * pos.x + xMove, 0.4 * pos.y, pos.z, 1.0);	 \n\
+	gl_Position = model * vec4(0.4 * pos.x, 0.4 * pos.y, pos.z, 1.0);	 \n\
 }";
 
 //Fragment Shader
@@ -44,7 +53,7 @@ void CreateTriangle() {
 	GLfloat vertices[] = {
 		-1.0f, -1.0f, 0.0f,
 		 1.0f, -1.0f, 0.0f,
-		 0.0f, 1.0f, 0.0f
+		 0.0f, 1.0f, 0.0f,
 	};
 
 	glGenVertexArrays(1, &VAO);
@@ -53,6 +62,10 @@ void CreateTriangle() {
 	glGenBuffers(1, &VBO);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	//GL_STREAM_DRAW  : the data is set only onceand used by the GPU at most a few times.
+	//GL_STATIC_DRAW  : the data is set only onceand used many times.
+	//GL_DYNAMIC_DRAW : the data is changed a lotand used many times.
+
 
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(0);
@@ -119,7 +132,15 @@ void CompileShaders() {
 		return;
 	}
 
-	uniformXMove = glGetUniformLocation(shader, "xMove");
+	uniformModel = glGetUniformLocation(shader, "model");
+}
+
+void processInput(GLFWwindow* window) {
+
+	//Close window when press ESC button
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, true);
+	
 }
 
 int main() {
@@ -130,6 +151,7 @@ int main() {
 		glfwTerminate();
 		return 1;
 	}
+	cout << "GLFW initialisation is completed!" << endl;
 
 	//Setup GLFW window properties
 	//OpenGL version
@@ -146,6 +168,8 @@ int main() {
 		printf("GLFW Window creation failed!");
 		return 1;
 	}
+	cout << "GLFW Window is created!" << endl;
+
 
 	//Get Buffer size information
 	int bufferWidth, bufferHeight;
@@ -163,15 +187,21 @@ int main() {
 		glfwTerminate();
 		return 1;
 	}
+	cout << "GLEW initialisation is completed!" << endl;
 
+	int locationX = 0, locationY = 0;
 	//Setup Viewport size
-	glViewport(0, 0, bufferWidth, bufferHeight);
+	glViewport(locationX, locationY, bufferWidth, bufferHeight);
 
 	CreateTriangle();
 	CompileShaders();
 
+	// Render loop
 	// Loop until window closed
 	while (!glfwWindowShouldClose(mainWindow)) {
+
+		processInput(mainWindow);
+
 		// Get + Handle user input events
 		glfwPollEvents();
 
@@ -186,21 +216,38 @@ int main() {
 			direction = !direction;
 		}
 
+		curAngle += 1.0f;
+		if (curAngle >= 360) {
+			curAngle -= 360;
+		}
+
 		//Clear window
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		glUseProgram(shader);
 
-		glUniform1f(uniformXMove, triOffset);
+		glm::mat4 model(1.0f);
+	
+		// Rotation
+		model = glm::rotate(model, curAngle * toRadians, glm::vec3(0.0f, 0.0f, 1.0f));
+
+		// Move
+		model = glm::translate(model, glm::vec3(triOffset, 0.0f, 0.0f));
+		//model = glm::translate(model, glm::vec3(triOffset, triOffset, 0.0f));
+	
+
+		//glUniform1f(uniformXMove, triOffset);
+		glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
 
 		glBindVertexArray(VAO);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		glBindVertexArray(0);
-
+		
 		glUseProgram(0);
 
 		glfwSwapBuffers(mainWindow);
+
 	}
 
 	return 0;
