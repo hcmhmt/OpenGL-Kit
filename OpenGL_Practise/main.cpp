@@ -14,6 +14,7 @@
 #include "Window.h"
 #include "Mesh.h"
 #include "Shader.h"
+#include "Camera.h"
 
 using namespace std;
 
@@ -23,18 +24,10 @@ const float toRadians = 3.14159265f / 180.0f;
 Window mainWindow;
 vector<Mesh*> meshList;
 vector<Shader> shaderList;
+Camera camera;
 
-bool direction = true;
-float triOffset = 0.0f;
-float triMaxoffset = 0.7f;
-float triIncrement= 0.0075f;
-
-float curAngle = 0.0f;
-
-bool sizeDirection = true;
-float curSize = 0.4f;
-float maxSize = 0.8f;
-float minSize = 0.1f;
+GLfloat deltaTime = 0.0f;
+GLfloat lastTime = 0.0f;
 
 // Vertex Shader
 static const char* vShader = "Shaders/shader.vert";
@@ -66,7 +59,7 @@ void CreateObjects() {
 	meshList.push_back(obj1);
 
 	Mesh *obj2 = new Mesh();
-	obj2->CreateMesh(vertices, indices, 12, 12);
+	obj2->CreateMesh(vertices, indices, 12, 12);  
 	meshList.push_back(obj2);
 
 }
@@ -94,44 +87,24 @@ int main() {
 	CreateObjects();
 	CreateShaders();
 
-	GLuint uniformProjection = 0, uniformModel = 0;
-	glm::mat4 projection = glm::perspective(45.0f, mainWindow.getBufferWidth() / mainWindow.getBufferHeight() , 0.1f, 100.0f);
+	camera = Camera(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 90.0f, 0.0f, 5.0f, 0.5f);
+
+	GLuint uniformProjection = 0, uniformModel = 0, uniformView = 0;
+	glm::mat4 projection = glm::perspective(45.0f, (GLfloat)mainWindow.getBufferWidth() / mainWindow.getBufferHeight() , 0.1f, 100.0f);
 
 	// Render loop
 	// Loop until window closed
 	while (!mainWindow.getShouldClose()) {
 
-		//processInput(mainWindow);
+		GLfloat now = glfwGetTime(); // SDL_GetPerformanceCounter();
+		deltaTime = now - lastTime; // (now - lastTime)*1000/SDL_GetPerformanceFrequency();
+		lastTime = now;
 
 		// Get + Handle user input events
 		glfwPollEvents();
 
-		if (direction) {
-			triOffset += triIncrement;
-		}
-		else {
-			triOffset -= triIncrement;
-		}
-
-		if (abs(triOffset) >= triMaxoffset) {
-			direction = !direction;
-		}
-
-		curAngle += 1.0f;
-		if (curAngle >= 360) {
-			curAngle -= 360;
-		}
-
-		if (direction) {
-			curSize += 0.001f;
-		}
-		else {
-			curSize -= 0.001f;
-		}
-
-		if (curSize >= maxSize || curSize <= minSize) {
-			sizeDirection = !sizeDirection;
-		}
+		camera.keyControl(mainWindow.getsKeys(), deltaTime);
+		camera.mouseControl(mainWindow.getXChange(), mainWindow.getYChange());
 
 		//Clear window
 		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -140,23 +113,19 @@ int main() {
 		shaderList[0].UseShader();
 		uniformModel = shaderList[0].GetModelLocation();
 		uniformProjection = shaderList[0].GetProjectionLocation();
+		uniformView = shaderList[0].GetViewLocation();
 
 		glm::mat4 model(1.0f);
-	
-		// Rotation
-		//model = glm::rotate(model, curAngle * toRadians, glm::vec3(0.0f, 0.0f, 1.0f));
 
-		// Move
-		//model = glm::translate(model, glm::vec3(triOffset, triOffset, 0.0f));
-
-		model = glm::translate(model, glm::vec3(triOffset, -0.5f, -2.5f));
+		model = glm::translate(model, glm::vec3(0.0f, 0.0f, -2.5f));
 		model = glm::scale(model, glm::vec3(0.4f , 0.4f, 1.0f));
 		glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
 		glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+		glUniformMatrix4fv(uniformView, 1, GL_FALSE, glm::value_ptr(camera.calculateViewMatrix()));
 		meshList[0]->RenderMesh();
 
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-triOffset, 0.5f, -2.5f));
+		model = glm::translate(model, glm::vec3(0.0f, 1.0f, -2.5f));
 		model = glm::scale(model, glm::vec3(0.4f, 0.4f, 1.0f));
 		glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
 		meshList[1]->RenderMesh();
